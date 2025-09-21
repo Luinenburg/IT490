@@ -35,3 +35,6 @@ def connect_mysql(mysql_ip):
 def main():
     connect_rabbitmq('localhost')
     connect_mysql('localhost')
+
+if __name__=="__main__":
+    main()
