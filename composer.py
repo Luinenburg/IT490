@@ -1,7 +1,5 @@
 import pika
-import sys
 import mysql.connector as mysql
-import time
 
 def connect_rabbitmq(rabbitmq_ip):
     connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_ip))
