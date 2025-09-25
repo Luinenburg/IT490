@@ -25,9 +25,10 @@ def connect_rabbitmq(rabbitmq_ip):
 
 def connect_mysql(mysql_ip):
     try:
-        mysql_connection = mysql.connect(host = mysql_ip, usr='test', passwd='test', database='test')
+        mysql_connection = mysql.connect(host = mysql_ip, user='test', passwd='test', database='test')
     except mysql.Error as err:
         print("Unable to connect to MySQL")
+        print(err)
         return
     print(f"Connection Made to MySQL on {mysql_ip}")
     return mysql_connection
