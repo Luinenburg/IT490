@@ -1,39 +1,70 @@
-import pika
+import pika 
 import mysql.connector as mysql
+import json 
+import sys
+import time
 
-def connect_rabbitmq(rabbitmq_ip):
-    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_ip))
-    channel = connection.channel()
-    channel.queue_declare(queue='test')
-    channel.basic_publish(exchange='', routing_key='test', body='Testing Connection...')
-    channel.close()
-    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_ip))
-    channel = connection.channel()
-    method_frame, header_frame, body = channel.basic_get('test')
-    if method_frame:
-        channel.basic_ack(method_frame.delivery_tag)
-        if body != b'Testing Connection...':
-            print(f"Wrong message in queue: {body}")
-    else:
-        print("No message in queue.")
-        connection.close()
-        return
-    print(f"Connection made on {rabbitmq_ip}")
-    return (connection, channel)
+def connect_db(): 
+    return mysql.connector.connect( 
+        host="localhost", 
+        user="test", 
+        password="test", 
+        database="test" 
+    ) 
 
-def connect_mysql(mysql_ip):
-    try:
-        mysql_connection = mysql.connect(host = mysql_ip, user='test', passwd='test', database='test')
-    except mysql.Error as err:
-        print("Unable to connect to MySQL")
-        print(err)
-        return
-    print(f"Connection Made to MySQL on {mysql_ip}")
-    return mysql_connection
+def fetch_users(limit=5):
+    db = connect_db()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT id, username, email FROM users LIMIT %s;", (limit,))
+    rows = cursor.fetchall()
+    db.close()
+    return rows
 
+def publish_messages(channel, rows):
+    for row in rows:
+        message = json.dumps(row)
+        channel.basic_publish(
+            exchange='',
+            routing_key='task_queue',
+            body=message,
+            properties=pika.BasicProperties(delivery_mode=2)
+        )
+        print(f" [x] Sent {message}")
+
+def callback(ch, method, properties, body):
+    data = json.loads(body.decode())
+    print(f" [x] Received {data}")
+    db = connect_db()
+    cursor = db.cursor()
+    cursor.execute("INSERT INTO logs (message) VALUES (%s)", (str(data),))
+    db.commit()
+    db.close()
+    ch.basic_ack(delivery_tag=method.delivery_tag) 
+    
 def main():
-    connect_rabbitmq('localhost')
-    connect_mysql('localhost')
-
-if __name__=="__main__":
+    try:
+        print("Connecting to RabbitMQ...")
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+        channel = connection.channel()
+        channel.queue_declare(queue='task_queue', durable=True)
+        
+        print("Fetching users from DB...")
+        rows = fetch_users(limit=5)
+        publish_messages(channel, rows)
+        
+        channel.basic_qos(prefetch_count=1)
+        channel.basic_consume(queue='task_queue', on_message_callback=callback)
+        print(" [*] Waiting for messages. To exit press CTRL+C")
+        channel.start_consuming()
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        try:
+            channel.stop_consuming()
+        except Exception:
+            pass
+        connection.close()
+        sys.exit(0)
+        
+if __name__ == "__main__":
+    time.sleep(5) 
     main()
