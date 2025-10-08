@@ -41,7 +41,7 @@ def connect_rabbitmq(rabbitmq_ip):
     channel.start_consuming()
 
 def main():
-    connect_rabbitmq('192.168.1.50')
+    connect_rabbitmq('localhost')
 
 
 if __name__ == "__main__":
