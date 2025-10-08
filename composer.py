@@ -1,39 +1,60 @@
-import pika
-import mysql.connector as mysql
+#!/bin/env python
+import pika, sys, os, mysql.connector as mysql
+
+
+sys.path.append('/mysite')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+
+def send_message(message):
+    connection = pika.BlockingConnection(rabbitmq)
+    channel = connection.channel()
+
+    # Declare queue (durable)
+    channel.queue_declare(queue=QUEUE_NAME, durable=True)
+
+    # Publish persistent message
+    channel.basic_publish(
+        exchange='',
+        routing_key=QUEUE_NAME,
+        body=message,
+        properties=pika.BasicProperties(
+            delivery_mode=2  # make message persistent
+        )
+    )
+    print(f"Sent: {message}")
+    connection.close()
+
+
 
 def connect_rabbitmq(rabbitmq_ip):
     connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_ip))
     channel = connection.channel()
-    channel.queue_declare(queue='test')
-    channel.basic_publish(exchange='', routing_key='test', body='Testing Connection...')
-    channel.close()
-    connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_ip))
-    channel = connection.channel()
-    method_frame, header_frame, body = channel.basic_get('test')
-    if method_frame:
-        channel.basic_ack(method_frame.delivery_tag)
-        if body != b'Testing Connection...':
-            print(f"Wrong message in queue: {body}")
-    else:
-        print("No message in queue.")
-        connection.close()
-        return
-    print(f"Connection made on {rabbitmq_ip}")
-    return (connection, channel)
 
-def connect_mysql(mysql_ip):
-    try:
-        mysql_connection = mysql.connect(host = mysql_ip, user='test', passwd='test', database='test')
-    except mysql.Error as err:
-        print("Unable to connect to MySQL")
-        print(err)
-        return
-    print(f"Connection Made to MySQL on {mysql_ip}")
-    return mysql_connection
+    channel.queue_declare(queue='hello',durable=True)
+
+    def callback(ch, method, properties, body):
+        print(f" [x] Received {body}")
+
+    channel.basic_consume(queue='hello', on_message_callback=callback, auto_ack=True)
+
+    print(' [*] Waiting for messages. To exit press CTRL+C')
+    channel.start_consuming()
 
 def main():
-    connect_rabbitmq('localhost')
-    connect_mysql('localhost')
+    connect_rabbitmq('192.168.1.50')
 
-if __name__=="__main__":
-    main()
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Send or receive messages from RabbitMQ")
+    parser.add_argument('--send', type=str, help='Send a message to the queue')
+    parser.add_argument('--consume', action='store_true', help='Start consuming messages')
+    args = parser.parse_args()
+
+    if args.send:
+        send_message(args.send)
+    elif args.consume:
+        start_consumer()
+    else:
+        print("Use --send <message> to send or --consume to receive messages")
