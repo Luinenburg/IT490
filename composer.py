@@ -2,8 +2,9 @@
 import pika, sys, os, mysql.connector as mysql
 
 
-sys.path.append('/mysite')
+sys.path.append('path/to/django/folder')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
+django.setup()
 
 def send_message(message):
     connection = pika.BlockingConnection(rabbitmq)
@@ -55,6 +56,6 @@ if __name__ == "__main__":
     if args.send:
         send_message(args.send)
     elif args.consume:
-        start_consumer()
+        consume('localhost')
     else:
         print("Use --send <message> to send or --consume to receive messages")
