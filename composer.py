@@ -3,9 +3,10 @@ import mysql.connector as mysql
 import json 
 import sys
 import time
+import subprocess
 
 def connect_db(): 
-    return mysql.connector.connect( 
+    return mysql.connect( 
         host="localhost", 
         user="test", 
         password="test", 
@@ -31,6 +32,11 @@ def publish_messages(channel, rows):
         )
         print(f" [x] Sent {message}")
 
+def start_service(channel, service_name):
+    msg = json.dumps({"service": service_name, "action": "start"})
+    channel.basic_publish(exchange='', routing_key='service_control', body=msg)
+    print(f"[x] Sent start command for {service_name}")
+
 def callback(ch, method, properties, body):
     data = json.loads(body.decode())
     print(f" [x] Received {data}")
@@ -44,9 +50,18 @@ def callback(ch, method, properties, body):
 def main():
     try:
         print("Connecting to RabbitMQ...")
-        connection = pika.BlockingConnection(pika.ConnectionParameters(host="localhost"))
+        connection = pika.BlockingConnection(pika.ConnectionParameters(host="172.25.19.0", credentials=pika.PlainCredentials(username="junk", password="junk")))
         channel = connection.channel()
         channel.queue_declare(queue='task_queue', durable=True)
+        channel.queue_declare(queue='service_control', durable=True)
+        
+        print(" [*] Sending startup messages to all services...")
+        for service in ["messaging", "database", "frontend", "backend"];
+            start_service(channel,service)
+            time.sleep(1)
+            
+        print("Waiting for database to initialize...")
+        time.sleep(5)
         
         print("Fetching users from DB...")
         rows = fetch_users(limit=5)
@@ -64,6 +79,8 @@ def main():
             pass
         connection.close()
         sys.exit(0)
+    except pika.exceptions.AMQPConnectionError:
+        print(" [!] Could not connect to RabbitMQ at 172.25.19.0. Check if it's running and reachable.")
         
 if __name__ == "__main__":
     time.sleep(5) 
